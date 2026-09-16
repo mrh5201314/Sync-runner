@@ -1,0 +1,93 @@
+name: Mirror Upstream Release
+
+on:
+  workflow_dispatch:
+
+env:
+  SYNC_REPO: mrh5201314/sync
+  SYNC_SUBDIR: .github
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+      empty: ${{ steps.pick.outputs.empty }}
+    steps:
+      - name: 生成 App 令牌
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: 拉取私有同步仓库
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+
+      - name: 解析待镜像列表
+        id: pick
+        env:
+          SYNC_SUBDIR: ${{ env.SYNC_SUBDIR }}
+        run: |
+          set -euo pipefail
+          CONFIG="/tmp/sync/${SYNC_SUBDIR}/sync-repos.json"
+          [ -f "$CONFIG" ] || { echo "::error::找不到 $CONFIG"; exit 1; }
+
+          SELECTED="$(jq -c '[.[] | select(.enabled != false)]' "$CONFIG")"
+          COUNT="$(echo "$SELECTED" | jq 'length')"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            echo "⚠️ 没有启用的仓库"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+            NORMALIZED="$(echo "$SELECTED" | jq -c 'map({
+              name: .name,
+              upstream: .upstream,
+              target: .target
+            })')"
+            echo "matrix={\"include\":$NORMALIZED}" >> "$GITHUB_OUTPUT"
+            echo "📋 本次镜像 $COUNT 个仓库"
+            echo "$NORMALIZED" | jq -r '.[] | "   → \(.name)"'
+          fi
+
+  mirror:
+    needs: select
+    if: ${{ needs.select.outputs.empty == 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    name: Mirror ${{ matrix.name }}
+    steps:
+      - name: 生成 App 令牌
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: 拉取私有同步仓库
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+
+      - name: 镜像 ${{ matrix.name }}
+        env:
+          GH_TOKEN:     ${{ steps.app-token.outputs.token }}
+          REPO_NAME:    ${{ matrix.name }}
+          UPSTREAM:     ${{ matrix.upstream }}
+          TARGET:       ${{ matrix.target }}
+          SYNC_SUBDIR:  ${{ env.SYNC_SUBDIR }}
+        run: bash "/tmp/sync/${SYNC_SUBDIR}/mirror-release.sh"
