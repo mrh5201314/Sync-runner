@@ -1,0 +1,122 @@
+name: Add Sync Repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: '仓库名（owner/repo 的 repo 部分，也是唯一标识）'
+        required: true
+        type: string
+      upstream:
+        description: '上游 HTTPS URL（例：https://github.com/owner/repo.git）'
+        required: true
+        type: string
+      branches:
+        description: '分支正则（留空默认 .*）'
+        required: false
+        default: '.*'
+        type: string
+      enabled:
+        description: '是否启用'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  SYNC_REPO: mrh5201314/sync
+  SYNC_SUBDIR: .github
+  CONFIG_FILE: sync-repos.json
+  TARGET_OWNER: ${{ github.repository_owner }}
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 生成 App 令牌
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: 拉取私有同步仓库
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+
+      - name: 更新 sync-repos.json
+        env:
+          INPUT_NAME:     ${{ github.event.inputs.name }}
+          INPUT_UPSTREAM: ${{ github.event.inputs.upstream }}
+          INPUT_BRANCHES: ${{ github.event.inputs.branches }}
+          INPUT_ENABLED:  ${{ github.event.inputs.enabled }}
+          SYNC_SUBDIR:    ${{ env.SYNC_SUBDIR }}
+          CONFIG_FILE:    ${{ env.CONFIG_FILE }}
+        run: |
+          set -euo pipefail
+          CONFIG="/tmp/sync/${SYNC_SUBDIR}/${CONFIG_FILE}"
+          [ -f "$CONFIG" ] || echo '[]' > "$CONFIG"
+
+          # ---- 输入规范化 ----
+          NAME="${INPUT_NAME}"
+          UPSTREAM="${INPUT_UPSTREAM}"
+          OWNER="${TARGET_OWNER}"
+          BRANCHES="${INPUT_BRANCHES:-.*}"
+          ENABLED="${INPUT_ENABLED:-true}"
+          TARGET="${OWNER}/${NAME}"
+
+          echo ">>> 目标：$TARGET"
+
+          # ---- 校验 ----
+          if ! printf '%s' "$NAME" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            echo "::error::name 只能包含字母数字._-"
+            exit 1
+          fi
+          if ! printf '%s' "$UPSTREAM" | grep -qE '^https://'; then
+            echo "::error::upstream 必须是 https:// 开头的 URL"
+            exit 1
+          fi
+
+          echo ">>> 更新前共 $(jq 'length' "$CONFIG") 个："
+          jq -r '.[] | "   - \(.name)"' "$CONFIG"
+
+          # ---- 构造新条目 ----
+          NEW_ENTRY="$(jq -cn \
+            --arg name     "$NAME" \
+            --arg upstream "$UPSTREAM" \
+            --arg target   "$TARGET" \
+            --arg branches "$BRANCHES" \
+            --argjson enabled "$ENABLED" \
+            '{name:$name, upstream:$upstream, target:$target, branches:$branches, enabled:$enabled}')"
+
+          # ---- upsert：先删同名，再追加 ----
+          UPDATED="$(jq -c \
+            --arg name "$NAME" \
+            --argjson entry "$NEW_ENTRY" \
+            'map(select(.name != $name)) + [$entry]' "$CONFIG")"
+
+          printf '%s\n' "$UPDATED" | jq '.' > "$CONFIG"
+
+          echo ">>> 更新后共 $(jq 'length' "$CONFIG") 个："
+          jq -r '.[] | "   - \(.name)\t\(.upstream) -> \(.target)"' "$CONFIG"
+
+      - name: 提交并推送
+        env:
+          SYNC_SUBDIR: ${{ env.SYNC_SUBDIR }}
+          CONFIG_FILE: ${{ env.CONFIG_FILE }}
+        run: |
+          set -euo pipefail
+          cd /tmp/sync
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${SYNC_SUBDIR}/${CONFIG_FILE}"
+          if git diff --cached --quiet; then
+            echo "ℹ️ 内容无变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore(sync-repos): upsert ${{ github.event.inputs.name }}"
+          git push
+          echo "✅ 已提交并推送"
