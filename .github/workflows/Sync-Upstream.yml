@@ -2,12 +2,8 @@ name: Sync Upstream
 
 on:
   schedule:
-    # cron: '分 时 天 月 周'，第 5 个参数 1=周一，0/7=周日
-    #- cron: '0 0 * * 1,3,5'
     # 每天 北京时间 08:00（UTC 00:00）
     - cron: '0 0 * * *'
-    #- cron: '0 0 * * 1'
-    #- cron: '0 0 1 * *'
   workflow_dispatch:
     inputs:
       mode:
