@@ -31,6 +31,7 @@ on:
 
 env:
   SYNC_REPO: mrh5201314/sync
+  SYNC_SUBDIR: .github/workflows
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
@@ -60,9 +61,10 @@ jobs:
           INPUT_MODE:     ${{ github.event.inputs.mode }}
           INPUT_UPSTREAM: ${{ github.event.inputs.test_upstream }}
           INPUT_TARGET:   ${{ github.event.inputs.test_target }}
+          SYNC_SUBDIR:    ${{ env.SYNC_SUBDIR }}
         run: |
           set -euo pipefail
-          CONFIG="/tmp/sync/sync-repos.json"
+          CONFIG="/tmp/sync/${SYNC_SUBDIR}/sync-repos.json"
 
           MODE="${INPUT_MODE:-All}"
           echo "🎛️  同步模式：$MODE"
@@ -140,4 +142,5 @@ jobs:
           UPSTREAM:       ${{ matrix.upstream }}
           TARGET:         ${{ matrix.target }}
           BRANCH_PATTERN: ${{ matrix.branches }}
-        run: bash /tmp/sync/sync-one.sh
+          SYNC_SUBDIR:    ${{ env.SYNC_SUBDIR }}
+        run: bash "/tmp/sync/${SYNC_SUBDIR}/sync-one.sh"
