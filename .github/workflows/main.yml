@@ -31,7 +31,7 @@ on:
 
 env:
   SYNC_REPO: mrh5201314/sync
-  SYNC_SUBDIR: .github/workflows
+  SYNC_SUBDIR: .github
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
