@@ -1,0 +1,87 @@
+name: Mirror All Upstream Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream:
+        description: '上游 HTTPS URL（例：https://github.com/owner/repo.git）'
+        required: true
+        type: string
+      target:
+        description: '目标 owner/repo（留空则用 github.repository_owner/上游repo名）'
+        required: false
+        default: ''
+        type: string
+      force:
+        description: '强制覆盖本地已有的同名 release（默认跳过已存在的）'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  SYNC_REPO: ${{ github.repository_owner }}/sync
+  SYNC_SUBDIR: .github
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+jobs:
+  mirror-all:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 生成 App 令牌
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: 拉取私有同步仓库
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+
+      - name: 解析 upstream / target
+        id: params
+        env:
+          INPUT_UPSTREAM: ${{ github.event.inputs.upstream }}
+          INPUT_TARGET:   ${{ github.event.inputs.target }}
+        run: |
+          set -euo pipefail
+          UPSTREAM="${INPUT_UPSTREAM}"
+          if ! printf '%s' "$UPSTREAM" | grep -qE '^https://'; then
+            echo "::error::upstream 必须是 https:// 开头的 URL"
+            exit 1
+          fi
+
+          REPO_NAME="$(printf '%s' "$UPSTREAM" \
+            | sed -E 's#/+$##' \
+            | sed -E 's#\.git$##' \
+            | awk -F/ '{print $NF}')"
+
+          TARGET="${INPUT_TARGET}"
+          if [ -z "$TARGET" ]; then
+            TARGET="${{ github.repository_owner }}/${REPO_NAME}"
+            echo "ℹ️  target 未填，自动拼接：$TARGET"
+          fi
+
+          if ! printf '%s' "$TARGET" | grep -qE '^[^/]+/[^/]+$'; then
+            echo "::error::target 必须是 owner/repo 格式（实际值：$TARGET）"
+            exit 1
+          fi
+
+          echo "upstream=$UPSTREAM" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET"     >> "$GITHUB_OUTPUT"
+          echo "repo_name=$REPO_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: 镜像所有 Release
+        env:
+          GH_TOKEN:     ${{ steps.app-token.outputs.token }}
+          UPSTREAM:     ${{ steps.params.outputs.upstream }}
+          TARGET:       ${{ steps.params.outputs.target }}
+          REPO_NAME:    ${{ steps.params.outputs.repo_name }}
+          FORCE:        ${{ github.event.inputs.force }}
+          SYNC_SUBDIR:  ${{ env.SYNC_SUBDIR }}
+        run: bash "/tmp/sync/${SYNC_SUBDIR}/mirror-all-releases.sh"
