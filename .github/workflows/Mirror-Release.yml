@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  SYNC_REPO: mrh5201314/sync
+  SYNC_REPO: ${{ github.repository_owner }}/sync
   SYNC_SUBDIR: .github
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
