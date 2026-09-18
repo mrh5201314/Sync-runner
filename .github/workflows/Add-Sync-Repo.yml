@@ -3,13 +3,14 @@ name: Add Sync Repo
 on:
   workflow_dispatch:
     inputs:
-      name:
-        description: '仓库名（owner/repo 的 repo 部分，也是唯一标识）'
-        required: true
-        type: string
       upstream:
         description: '上游 HTTPS URL（例：https://github.com/owner/repo.git）'
         required: true
+        type: string
+      name:
+        description: '仓库名（留空则自动从 upstream URL 中提取 repo 名）'
+        required: false
+        default: ''
         type: string
       branches:
         description: '分支正则（留空默认 .*）'
@@ -23,7 +24,7 @@ on:
         type: boolean
 
 env:
-  SYNC_REPO: mrh5201314/sync
+  SYNC_REPO: ${{ github.repository_owner }}/sync
   SYNC_SUBDIR: .github
   CONFIG_FILE: sync-repos.json
   TARGET_OWNER: ${{ github.repository_owner }}
@@ -66,17 +67,32 @@ jobs:
           OWNER="${TARGET_OWNER}"
           BRANCHES="${INPUT_BRANCHES:-.*}"
           ENABLED="${INPUT_ENABLED:-true}"
-          TARGET="${OWNER}/${NAME}"
 
-          echo ">>> 目标：$TARGET"
-
-          # ---- 校验 ----
-          if ! printf '%s' "$NAME" | grep -qE '^[A-Za-z0-9._-]+$'; then
-            echo "::error::name 只能包含字母数字._-"
-            exit 1
-          fi
+          # ---- 校验 upstream ----
           if ! printf '%s' "$UPSTREAM" | grep -qE '^https://'; then
             echo "::error::upstream 必须是 https:// 开头的 URL"
+            exit 1
+          fi
+
+          # ---- 如果 name 留空，从 upstream URL 里提取 repo 名 ----
+          if [ -z "$NAME" ]; then
+            NAME="$(printf '%s' "$UPSTREAM" \
+              | sed -E 's#/+$##' \
+              | sed -E 's#\.git$##' \
+              | awk -F/ '{print $NF}')"
+            echo "ℹ️  name 未填，从 upstream 自动提取：$NAME"
+          fi
+
+          TARGET="${OWNER}/${NAME}"
+          echo ">>> 目标：$TARGET"
+
+          # ---- 校验 name ----
+          if [ -z "$NAME" ]; then
+            echo "::error::无法从 upstream 提取 repo 名，请手动填写 name"
+            exit 1
+          fi
+          if ! printf '%s' "$NAME" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            echo "::error::name 只能包含字母数字._-（实际值：$NAME）"
             exit 1
           fi
 
@@ -107,9 +123,20 @@ jobs:
         env:
           SYNC_SUBDIR: ${{ env.SYNC_SUBDIR }}
           CONFIG_FILE: ${{ env.CONFIG_FILE }}
+          INPUT_NAME:  ${{ github.event.inputs.name }}
+          INPUT_UPSTREAM: ${{ github.event.inputs.upstream }}
         run: |
           set -euo pipefail
           cd /tmp/sync
+
+          CM_NAME="${INPUT_NAME}"
+          if [ -z "$CM_NAME" ]; then
+            CM_NAME="$(printf '%s' "$INPUT_UPSTREAM" \
+              | sed -E 's#/+$##' \
+              | sed -E 's#\.git$##' \
+              | awk -F/ '{print $NF}')"
+          fi
+
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "${SYNC_SUBDIR}/${CONFIG_FILE}"
@@ -117,6 +144,6 @@ jobs:
             echo "ℹ️ 内容无变化，跳过提交"
             exit 0
           fi
-          git commit -m "chore(sync-repos): upsert ${{ github.event.inputs.name }}"
+          git commit -m "chore(sync-repos): upsert $CM_NAME"
           git push
           echo "✅ 已提交并推送"
