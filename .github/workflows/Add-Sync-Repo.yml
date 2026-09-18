@@ -17,6 +17,11 @@ on:
         required: false
         default: '.*'
         type: string
+      frequency:
+        description: '同步频率：留空/daily=每天；weekly:1,3,5=周一三五；monthly:1,15=每月1和15号'
+        required: false
+        default: 'daily'
+        type: string
       enabled:
         description: '是否启用'
         required: false
@@ -50,12 +55,13 @@ jobs:
 
       - name: 更新 sync-repos.json
         env:
-          INPUT_NAME:     ${{ github.event.inputs.name }}
-          INPUT_UPSTREAM: ${{ github.event.inputs.upstream }}
-          INPUT_BRANCHES: ${{ github.event.inputs.branches }}
-          INPUT_ENABLED:  ${{ github.event.inputs.enabled }}
-          SYNC_SUBDIR:    ${{ env.SYNC_SUBDIR }}
-          CONFIG_FILE:    ${{ env.CONFIG_FILE }}
+          INPUT_NAME:      ${{ github.event.inputs.name }}
+          INPUT_UPSTREAM:  ${{ github.event.inputs.upstream }}
+          INPUT_BRANCHES:  ${{ github.event.inputs.branches }}
+          INPUT_FREQUENCY: ${{ github.event.inputs.frequency }}
+          INPUT_ENABLED:   ${{ github.event.inputs.enabled }}
+          SYNC_SUBDIR:     ${{ env.SYNC_SUBDIR }}
+          CONFIG_FILE:     ${{ env.CONFIG_FILE }}
         run: |
           set -euo pipefail
           CONFIG="/tmp/sync/${SYNC_SUBDIR}/${CONFIG_FILE}"
@@ -66,6 +72,7 @@ jobs:
           UPSTREAM="${INPUT_UPSTREAM}"
           OWNER="${TARGET_OWNER}"
           BRANCHES="${INPUT_BRANCHES:-.*}"
+          FREQUENCY="${INPUT_FREQUENCY:-}"
           ENABLED="${INPUT_ENABLED:-true}"
 
           # ---- 校验 upstream ----
@@ -96,17 +103,27 @@ jobs:
             exit 1
           fi
 
+          # ---- 校验 frequency ----
+          if [ -n "$FREQUENCY" ] && [ "$FREQUENCY" != "daily" ]; then
+            if ! printf '%s' "$FREQUENCY" | grep -qE '^(weekly|monthly):[0-9]+(,[0-9]+)*$'; then
+              echo "::error::frequency 格式无效（实际值：$FREQUENCY）"
+              echo "  正确格式：空/daily | weekly:1,3,5 | monthly:1,15"
+              exit 1
+            fi
+          fi
+
           echo ">>> 更新前共 $(jq 'length' "$CONFIG") 个："
           jq -r '.[] | "   - \(.name)"' "$CONFIG"
 
           # ---- 构造新条目 ----
           NEW_ENTRY="$(jq -cn \
-            --arg name     "$NAME" \
-            --arg upstream "$UPSTREAM" \
-            --arg target   "$TARGET" \
-            --arg branches "$BRANCHES" \
+            --arg name      "$NAME" \
+            --arg upstream  "$UPSTREAM" \
+            --arg target    "$TARGET" \
+            --arg branches  "$BRANCHES" \
+            --arg frequency "$FREQUENCY" \
             --argjson enabled "$ENABLED" \
-            '{name:$name, upstream:$upstream, target:$target, branches:$branches, enabled:$enabled}')"
+            '{name:$name, upstream:$upstream, target:$target, branches:$branches, frequency:$frequency, enabled:$enabled}')"
 
           # ---- upsert：先删同名，再追加 ----
           UPDATED="$(jq -c \
@@ -117,14 +134,14 @@ jobs:
           printf '%s\n' "$UPDATED" | jq '.' > "$CONFIG"
 
           echo ">>> 更新后共 $(jq 'length' "$CONFIG") 个："
-          jq -r '.[] | "   - \(.name)\t\(.upstream) -> \(.target)"' "$CONFIG"
+          jq -r '.[] | "   - \(.name)\t\(.upstream) -> \(.target)  [\(.frequency // "daily")]"' "$CONFIG"
 
       - name: 提交并推送
         env:
-          SYNC_SUBDIR: ${{ env.SYNC_SUBDIR }}
-          CONFIG_FILE: ${{ env.CONFIG_FILE }}
-          INPUT_NAME:  ${{ github.event.inputs.name }}
-          INPUT_UPSTREAM: ${{ github.event.inputs.upstream }}
+          SYNC_SUBDIR:     ${{ env.SYNC_SUBDIR }}
+          CONFIG_FILE:     ${{ env.CONFIG_FILE }}
+          INPUT_NAME:      ${{ github.event.inputs.name }}
+          INPUT_UPSTREAM:  ${{ github.event.inputs.upstream }}
         run: |
           set -euo pipefail
           cd /tmp/sync

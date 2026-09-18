@@ -85,13 +85,34 @@ jobs:
 
           [ -f "$CONFIG" ] || { echo "::error::找不到 $CONFIG"; exit 1; }
 
-          SELECTED="$(jq -c '[.[] | select(.enabled != false)]' "$CONFIG")"
+          DOW=$(date -u +%w)          # 0=周日, 1=周一 ... 6=周六
+          DOM=$(date -u +%-d)         # 1-31
+          echo "📅 今天 UTC：周 $DOW，$DOM 号"
+
+          SELECTED="$(
+            jq -c --arg dow "$DOW" --arg dom "$DOM" '
+              [ .[]
+                | select(.enabled != false)
+                | (.frequency // "daily") as $f
+                | if   ($f == "" or $f == "daily") then .
+                  elif ($f | startswith("weekly:")) then
+                    ($f | sub("^weekly:"; "") | split(",") | map(gsub("\\s"; ""))) as $days
+                    | if ($days | index($dow)) then . else empty end
+                  elif ($f | startswith("monthly:")) then
+                    ($f | sub("^monthly:"; "") | split(",") | map(gsub("\\s"; ""))) as $days
+                    | if ($days | index($dom)) then . else empty end
+                  else .
+                  end
+              ]
+            ' "$CONFIG"
+          )"
+
           COUNT="$(echo "$SELECTED" | jq 'length')"
 
           if [ "$COUNT" -eq 0 ]; then
             echo "empty=true" >> "$GITHUB_OUTPUT"
             echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-            echo "⚠️ 没有启用的仓库"
+            echo "⚠️ 今天没有需要同步的仓库"
           else
             echo "empty=false" >> "$GITHUB_OUTPUT"
             NORMALIZED="$(echo "$SELECTED" | jq -c 'map({
