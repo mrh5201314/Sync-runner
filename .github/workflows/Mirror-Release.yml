@@ -1,4 +1,4 @@
-name: Mirror Upstream Release
+name: Mirror Latest Upstream Release
 
 on:
   schedule:
