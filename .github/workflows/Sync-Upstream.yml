@@ -160,4 +160,4 @@ jobs:
           TARGET:         ${{ matrix.target }}
           BRANCH_PATTERN: ${{ matrix.branches }}
           SYNC_SUBDIR:    ${{ env.SYNC_SUBDIR }}
-        run: bash "/tmp/sync/${SYNC_SUBDIR}/sync-one.sh"
+        run: bash "/tmp/sync/${SYNC_SUBDIR}/sync-branch.sh"
