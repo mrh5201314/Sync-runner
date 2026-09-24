@@ -112,8 +112,8 @@ jobs:
             fi
           fi
 
-          echo ">>> 更新前共 $(jq 'length' "$CONFIG") 个："
-          jq -r '.[] | "   - \(.name)"' "$CONFIG"
+#          echo ">>> 更新前共 $(jq 'length' "$CONFIG") 个："
+#          jq -r '.[] | "   - \(.name)"' "$CONFIG"
 
           # ---- 构造新条目 ----
           NEW_ENTRY="$(jq -cn \
@@ -133,8 +133,8 @@ jobs:
 
           printf '%s\n' "$UPDATED" | jq '.' > "$CONFIG"
 
-          echo ">>> 更新后共 $(jq 'length' "$CONFIG") 个："
-          jq -r '.[] | "   - \(.name)\t\(.upstream) -> \(.target)  [\(.frequency // "daily")]"' "$CONFIG"
+#          echo ">>> 更新后共 $(jq 'length' "$CONFIG") 个："
+#          jq -r '.[] | "   - \(.name)\t\(.upstream) -> \(.target)  [\(.frequency // "daily")]"' "$CONFIG"
 
       - name: 提交并推送
         env:
