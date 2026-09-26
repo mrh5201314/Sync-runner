@@ -1,0 +1,59 @@
+name: Bare To JIANGUOYUN
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_scope:
+        description: '备份范围'
+        required: true
+        default: 'specific'
+        type: choice
+        options:
+          - all       # 全部仓库
+          - specific  # 指定仓库
+      target_repo:
+        description: '指定仓库名（多个用英文逗号分隔），仅 backup_scope=specific 时生效，只需要填写仓库名，不需要填写完整路径'
+        required: false
+        type: string
+  #schedule:
+  #  - cron: '0 10 * * 0'  # 每周日 UTC 10:00 = 北京时间 18:00
+
+env:
+  SYNC_REPO: ${{ github.repository_owner }}/sync
+  SYNC_SUBDIR: .github
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: backup-jianguoyun
+      cancel-in-progress: false
+
+    steps:
+      - name: 生成 App 令牌
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: 拉取私有同步仓库
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+
+      - name: 执行备份
+        env:
+          GH_TOKEN:             ${{ steps.app-token.outputs.token }}
+          JIANGUOYUN_USER:      ${{ secrets.JIANGUOYUN_USER }}
+          JIANGUOYUN_PASSWORD:  ${{ secrets.JIANGUOYUN_PASSWORD }}
+          OWNER:                ${{ github.repository_owner }}
+          SCOPE:                ${{ inputs.backup_scope || 'all' }}
+          TARGET_NAME:          ${{ inputs.target_repo }}
+          SYNC_SUBDIR:          ${{ env.SYNC_SUBDIR }}
+        run: bash "/tmp/sync/${SYNC_SUBDIR}/bare-to-jianguoyun.sh"
