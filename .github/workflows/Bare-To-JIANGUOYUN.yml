@@ -9,10 +9,10 @@ on:
         default: 'specific'
         type: choice
         options:
+          - specific  # 指定仓库（默认）
           - all       # 全部仓库
-          - specific  # 指定仓库
       target_repo:
-        description: '指定仓库名（多个用英文逗号分隔），仅 backup_scope=specific 时生效，只需要填写仓库名，不需要填写完整路径'
+        description: '指定仓库名（多个用英文逗号分隔），仅备份范围 specific 时生效，只需要填写仓库名，不需要填写完整路径'
         required: false
         type: string
   #schedule:
@@ -45,7 +45,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+          # 不用 --depth 1，脚本需要 push backup-state.json
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
 
       - name: 执行备份
         env:
