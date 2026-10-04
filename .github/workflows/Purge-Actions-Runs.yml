@@ -1,0 +1,80 @@
+name: Purge Actions Runs
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_mode:
+        description: '仓库筛选方式'
+        required: true
+        default: '全部'
+        type: choice
+        options:
+          - 全部
+          - 包含
+          - 不包含
+
+      repo_names:
+        description: '仓库名列表（英文逗号分隔，不带 owner）。仅当筛选方式为 包含/不包含 时生效'
+        required: false
+        default: ''
+        type: string
+
+      filter:
+        description: '删除条件'
+        required: true
+        default: '删除所有的'
+        type: choice
+        options:
+          - 删超30天的
+          - 删超半年的
+          - 删超一年的
+          - 删除所有的
+          - 删除失败的
+          - 删除取消的
+          - 删除跳过的
+
+      dry_run:
+        description: '仅打印不真删（排查用，建议先跑一次 true）'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  SYNC_REPO: ${{ github.repository_owner }}/sync
+  SYNC_SUBDIR: .github
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      actions: write
+      contents: read
+
+    steps:
+      - name: 生成 App 令牌
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: 拉取私有同步仓库
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
+
+      - name: 执行清理
+        env:
+          # 统一用 App 令牌，不再需要 GH_PAT
+          GH_TOKEN:    ${{ steps.app-token.outputs.token }}
+          OWNER:       ${{ github.repository_owner }}
+          REPO_MODE:   ${{ inputs.repo_mode }}
+          REPO_NAMES:  ${{ inputs.repo_names }}
+          FILTER:      ${{ inputs.filter }}
+          DRY_RUN:     ${{ inputs.dry_run }}
+          SYNC_SUBDIR: ${{ env.SYNC_SUBDIR }}
+        run: bash "/tmp/sync/${SYNC_SUBDIR}/purge-actions-runs.sh"
