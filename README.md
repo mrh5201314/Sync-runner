@@ -1,6 +1,6 @@
 # Sync-runner
 
-GitHub Actions 工作流集合，用于仓库同步、Release 镜像、Actions 清理和坚果云备份。
+GitHub Actions Workflows Collection
 
 ## Variables & Secrets
 
