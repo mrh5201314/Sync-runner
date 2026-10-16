@@ -1,4 +1,8 @@
 name: Mirror All Upstream Releases
+run-name: >-
+  ${{ github.event.inputs.target != ''
+    && format('Mirror {0} Releases', github.event.inputs.target)
+    || format('Mirror {0} Releases', github.event.inputs.upstream) }}
 
 on:
   workflow_dispatch:
@@ -8,7 +12,7 @@ on:
         required: true
         type: string
       target:
-        description: '目标 owner/repo（留空则用 github.repository_owner/上游repo名）'
+        description: '目标仓库（可填 repo 名或 owner/repo；留空或仅填 repo 名时，自动拼成 github.repository_owner/repo）'
         required: false
         default: ''
         type: string
@@ -65,10 +69,13 @@ jobs:
           if [ -z "$TARGET" ]; then
             TARGET="${{ github.repository_owner }}/${REPO_NAME}"
             echo "ℹ️  target 未填，自动拼接：$TARGET"
+          elif ! printf '%s' "$TARGET" | grep -q '/'; then
+            TARGET="${{ github.repository_owner }}/${TARGET}"
+            echo "ℹ️  target 仅填仓库名，自动补全：$TARGET"
           fi
 
           if ! printf '%s' "$TARGET" | grep -qE '^[^/]+/[^/]+$'; then
-            echo "::error::target 必须是 owner/repo 格式（实际值：$TARGET）"
+            echo "::error::target 格式非法（实际值：$TARGET）"
             exit 1
           fi
 

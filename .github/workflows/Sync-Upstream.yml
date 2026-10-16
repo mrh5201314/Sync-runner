@@ -1,4 +1,10 @@
 name: Sync Upstream
+run-name: >-
+  ${{ github.event.inputs.mode == 'Single'
+    && format('Sync {0}', github.event.inputs.single_target != ''
+      && github.event.inputs.single_target
+      || github.event.inputs.single_upstream)
+    || 'Sync Upstream' }}
 
 on:
   schedule:
@@ -13,14 +19,14 @@ on:
         type: choice
         options:
           - All
-          - Test
-      test_upstream:
-        description: 'Test 模式：上游 HTTPS URL'
+          - Single
+      single_upstream:
+        description: 'Single 模式：上游 HTTPS URL'
         required: false
         default: ''
         type: string
-      test_target:
-        description: 'Test 模式：目标 owner/repo'
+      single_target:
+        description: 'Single 模式：目标仓库（可填 repo 名或 owner/repo；留空或仅填 repo 名时，自动拼成 github.repository_owner/repo）'
         required: false
         default: ''
         type: string
@@ -55,8 +61,8 @@ jobs:
         id: pick
         env:
           INPUT_MODE:     ${{ github.event.inputs.mode }}
-          INPUT_UPSTREAM: ${{ github.event.inputs.test_upstream }}
-          INPUT_TARGET:   ${{ github.event.inputs.test_target }}
+          INPUT_UPSTREAM: ${{ github.event.inputs.single_upstream }}
+          INPUT_TARGET:   ${{ github.event.inputs.single_target }}
           SYNC_SUBDIR:    ${{ env.SYNC_SUBDIR }}
         run: |
           set -euo pipefail
@@ -65,18 +71,31 @@ jobs:
           MODE="${INPUT_MODE:-All}"
           echo "🎛️  同步模式：$MODE"
 
-          if [ "$MODE" = "Test" ]; then
-            if [ -z "${INPUT_UPSTREAM:-}" ] || [ -z "${INPUT_TARGET:-}" ]; then
-              echo "::error::Test 模式必须同时填写 test_upstream 和 test_target"
+          if [ "$MODE" = "Single" ]; then
+            if [ -z "${INPUT_UPSTREAM:-}" ]; then
+              echo "::error::Single 模式必须填写 single_upstream"
               exit 1
             fi
-            NAME="$(echo "$INPUT_TARGET" | awk -F/ '{print $NF}')"
+            REPO_NAME="$(printf '%s' "$INPUT_UPSTREAM" \
+              | sed -E 's#/+$##' \
+              | sed -E 's#\.git$##' \
+              | awk -F/ '{print $NF}')"
+
+            TARGET="${INPUT_TARGET}"
+            if [ -z "$TARGET" ]; then
+              TARGET="${{ github.repository_owner }}/${REPO_NAME}"
+              echo "ℹ️  single_target 未填，自动拼接：$TARGET"
+            elif ! printf '%s' "$TARGET" | grep -q '/'; then
+              TARGET="${{ github.repository_owner }}/${TARGET}"
+              echo "ℹ️  single_target 仅填仓库名，自动补全：$TARGET"
+            fi
+            NAME="${TARGET##*/}"
             NORMALIZED="$(jq -cn \
               --arg name "$NAME" \
               --arg upstream "$INPUT_UPSTREAM" \
-              --arg target "$INPUT_TARGET" \
+              --arg target "$TARGET" \
               '[{name:$name, upstream:$upstream, target:$target, branches:".*"}]')"
-            echo "🧪 Test 模式："
+            echo "🧪 Single 模式："
             echo "$NORMALIZED" | jq -r '.[] | "   → \(.name)\t\(.upstream)  ->  \(.target)"'
             echo "empty=false" >> "$GITHUB_OUTPUT"
             echo "matrix={\"include\":$NORMALIZED}" >> "$GITHUB_OUTPUT"
