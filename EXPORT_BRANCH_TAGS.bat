@@ -1,85 +1,88 @@
 @echo off
-mode con cp select=936 >nul
+:: GBK è¾“å‡º
+:: mode con cp select=936 >nul
+:: UTF-8 è¾“å‡ºï¼Œèƒ½è§£å†³ä¸­æ–‡æ ‡ç­¾ä¹±ç é—®é¢˜ï¼Œä½†æ˜¯å¿…é¡» æ—  BOM ä¿å­˜
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-:: ====================== µ¼³öÏîÄ¿µÄ tags + branches ======================
+:: ====================== å¯¼å‡ºé¡¹ç›®çš„ tags + branches ======================
 :EXPORT_MENU
 
-:: »ñÈ¡µ±Ç°ÎÄ¼þ¼ÐÃû
+:: èŽ·å–å½“å‰æ–‡ä»¶å¤¹å
 for %%I in ("%~dp0.") do set "FolderName=%%~nxI"
 
-:: ¼ì²é Git ²Ö¿â
+:: æ£€æŸ¥ Git ä»“åº“
 git rev-parse --git-dir >nul 2>nul
 if errorlevel 1 (
-    echo ²»ÊÇ Git ²Ö¿â£¬ÎÞ·¨µ¼³ö¡£
+    echo ä¸æ˜¯ Git ä»“åº“ï¼Œæ— æ³•å¯¼å‡ºã€‚
     pause
     exit /b 1
 )
 
-:: ---------- ÊÕ¼¯ tags ----------
+:: ---------- æ”¶é›† tags ----------
 set tag_idx=0
 for /f "delims=" %%t in ('git tag --sort=creatordate') do (
     set /a tag_idx+=1
     set "tag!tag_idx!=%%t"
 )
 
-:: ---------- ÊÕ¼¯ branches£¨±¾µØ·ÖÖ§£¬°´×î½üÌá½»ÅÅÐò£© ----------
+:: ---------- æ”¶é›† branchesï¼ˆæœ¬åœ°åˆ†æ”¯ï¼ŒæŒ‰æœ€è¿‘æäº¤æŽ’åºï¼‰ ----------
 set branch_idx=0
 for /f "delims=" %%b in ('git for-each-ref --sort=-committerdate --format="%%(refname:short)" refs/heads') do (
     set /a branch_idx+=1
     set "branch!branch_idx!=%%b"
 )
 
-:: ×ÜÊýÎª 0 Ê±ÍË³ö
+:: æ€»æ•°ä¸º 0 æ—¶é€€å‡º
 set /a total_idx=tag_idx+branch_idx
 if %total_idx% equ 0 (
-    echo ¸ÃÏîÄ¿Ã»ÓÐÈÎºÎ±êÇ©»ò·ÖÖ§¡£
+    echo è¯¥é¡¹ç›®æ²¡æœ‰ä»»ä½•æ ‡ç­¾æˆ–åˆ†æ”¯ã€‚
     pause
     exit /b 0
 )
 
 echo.
-echo ===== ÏîÄ¿ %FolderName% µÄ±êÇ©Óë·ÖÖ§ÁÐ±í =====
+echo ===== é¡¹ç›® %FolderName% çš„æ ‡ç­¾ä¸Žåˆ†æ”¯åˆ—è¡¨ =====
 
 if %tag_idx% gtr 0 (
-    echo [±êÇ©]
+    echo [æ ‡ç­¾]
     for /l %%i in (1,1,%tag_idx%) do (
         echo %%i. !tag%%i!
     )
 ) else (
-    echo [±êÇ©] ÎÞ
+    echo [æ ‡ç­¾] æ— 
 )
 echo.
 if %branch_idx% gtr 0 (
-    echo [·ÖÖ§]
+    echo [åˆ†æ”¯]
     for /l %%i in (1,1,%branch_idx%) do (
         set /a real_idx=tag_idx+%%i
         echo !real_idx!. !branch%%i!
     )
 ) else (
-    echo [·ÖÖ§] ÎÞ
+    echo [åˆ†æ”¯] æ— 
 )
-echo 0. µ¼³öÈ«²¿±êÇ©ºÍ·ÖÖ§
+echo 0. å¯¼å‡ºå…¨éƒ¨æ ‡ç­¾å’Œåˆ†æ”¯
 echo.
 
 set "choice="
-set /p "choice=ÇëÊäÈë±àºÅ (1-%total_idx%) »òÊäÈë 0 µ¼³öÈ«²¿£º"
+set /p "choice=è¯·è¾“å…¥ç¼–å· (1-%total_idx%) æˆ–è¾“å…¥ 0 å¯¼å‡ºå…¨éƒ¨ï¼š"
 echo.
 
 if not defined choice goto EXPORT_MENU
 if "!choice!"=="0" goto EXPORT_ALL
 
-:: Ð£ÑéÊÇ·ñÎª´¿Êý×Ö
+:: æ ¡éªŒæ˜¯å¦ä¸ºçº¯æ•°å­—
 echo(!choice!|findstr /r "^[0-9][0-9]*$" >nul
 if errorlevel 1 goto EXPORT_MENU
 if !choice! lss 1 goto EXPORT_MENU
 if !choice! gtr %total_idx% goto EXPORT_MENU
 
-:: ---------- ÅÐ¶ÏÑ¡ÔñµÄÊÇ tag »¹ÊÇ branch ----------
+:: ---------- åˆ¤æ–­é€‰æ‹©çš„æ˜¯ tag è¿˜æ˜¯ branch ----------
 if !choice! leq %tag_idx% (
-    :: µ¼³ö tag
+    :: å¯¼å‡º tag
     set "selected_tag=!tag%choice%!"
-    echo µ¼³ö±êÇ©: !selected_tag!
+    echo å¯¼å‡ºæ ‡ç­¾: !selected_tag!
 
     set "safe_name=!selected_tag:/=_!"
     set "safe_name=!safe_name:\=_!"
@@ -89,15 +92,15 @@ if !choice! leq %tag_idx% (
     git archive --format=zip --output="!output_zip!" "!selected_tag!"
 
     if errorlevel 1 (
-        echo µ¼³öÊ§°Ü
+        echo å¯¼å‡ºå¤±è´¥
     ) else (
-        echo ³É¹¦µ¼³ö: !output_zip!
+        echo æˆåŠŸå¯¼å‡º: !output_zip!
     )
 ) else (
-    :: µ¼³ö branch
+    :: å¯¼å‡º branch
     set /a bi=!choice!-tag_idx
     for %%k in (!bi!) do set "selected_branch=!branch%%k!"
-    echo µ¼³ö·ÖÖ§: !selected_branch!
+    echo å¯¼å‡ºåˆ†æ”¯: !selected_branch!
 
     set "safe_name=!selected_branch:/=_!"
     set "safe_name=!safe_name:\=_!"
@@ -107,9 +110,9 @@ if !choice! leq %tag_idx% (
     git archive --format=zip --output="!output_zip!" "!selected_branch!"
 
     if errorlevel 1 (
-        echo µ¼³öÊ§°Ü
+        echo å¯¼å‡ºå¤±è´¥
     ) else (
-        echo ³É¹¦µ¼³ö: !output_zip!
+        echo æˆåŠŸå¯¼å‡º: !output_zip!
     )
 )
 
@@ -118,16 +121,16 @@ timeout /t 3 /nobreak >nul
 exit /b 0
 
 
-:: ====================== µ¼³öÈ«²¿ ======================
+:: ====================== å¯¼å‡ºå…¨éƒ¨ ======================
 :EXPORT_ALL
 echo.
-echo ÕýÔÚµ¼³öÏîÄ¿ !FolderName! µÄËùÓÐ±êÇ©ºÍ·ÖÖ§...
+echo æ­£åœ¨å¯¼å‡ºé¡¹ç›® !FolderName! çš„æ‰€æœ‰æ ‡ç­¾å’Œåˆ†æ”¯...
 
-:: µ¼³öËùÓÐ tags
+:: å¯¼å‡ºæ‰€æœ‰ tags
 if %tag_idx% gtr 0 (
     for /l %%i in (1,1,%tag_idx%) do (
         set "name=!tag%%i!"
-        echo µ¼³ö±êÇ©: !name!
+        echo å¯¼å‡ºæ ‡ç­¾: !name!
 
         set "safe_name=!name:/=_!"
         set "safe_name=!safe_name:\=_!"
@@ -137,18 +140,18 @@ if %tag_idx% gtr 0 (
         git archive --format=zip --output="!output_zip!" "!name!"
 
         if errorlevel 1 (
-            echo ¾¯¸æ£ºµ¼³ö±êÇ© !name! Ê§°Ü
+            echo è­¦å‘Šï¼šå¯¼å‡ºæ ‡ç­¾ !name! å¤±è´¥
         ) else (
-            echo ³É¹¦µ¼³ö: !output_zip!
+            echo æˆåŠŸå¯¼å‡º: !output_zip!
         )
     )
 )
 
-:: µ¼³öËùÓÐ branches
+:: å¯¼å‡ºæ‰€æœ‰ branches
 if %branch_idx% gtr 0 (
     for /l %%i in (1,1,%branch_idx%) do (
         set "name=!branch%%i!"
-        echo µ¼³ö·ÖÖ§: !name!
+        echo å¯¼å‡ºåˆ†æ”¯: !name!
 
         set "safe_name=!name:/=_!"
         set "safe_name=!safe_name:\=_!"
@@ -158,15 +161,15 @@ if %branch_idx% gtr 0 (
         git archive --format=zip --output="!output_zip!" "!name!"
 
         if errorlevel 1 (
-            echo ¾¯¸æ£ºµ¼³ö·ÖÖ§ !name! Ê§°Ü
+            echo è­¦å‘Šï¼šå¯¼å‡ºåˆ†æ”¯ !name! å¤±è´¥
         ) else (
-            echo ³É¹¦µ¼³ö: !output_zip!
+            echo æˆåŠŸå¯¼å‡º: !output_zip!
         )
     )
 )
 
 echo.
-echo ¡Ì ÏîÄ¿ !FolderName! µÄËùÓÐ±êÇ©ºÍ·ÖÖ§ÒÑµ¼³öµ½µ±Ç°Ä¿Â¼¡£
-echo    ÎÄ¼þÃû¸ñÊ½£ºÏîÄ¿Ãû_±êÇ©Ãû»ò·ÖÖ§Ãû.zip
+echo âˆš é¡¹ç›® !FolderName! çš„æ‰€æœ‰æ ‡ç­¾å’Œåˆ†æ”¯å·²å¯¼å‡ºåˆ°å½“å‰ç›®å½•ã€‚
+echo    æ–‡ä»¶åæ ¼å¼ï¼šé¡¹ç›®å_æ ‡ç­¾åæˆ–åˆ†æ”¯å.zip
 timeout /t 3 /nobreak >nul
 exit /b 0
