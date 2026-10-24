@@ -12,6 +12,8 @@ PATH：Repository Settings → Secrets and variables → Actions
 | APP_PRIVATE_KEY | Secret | Shared by all workflows |
 | JIANGUOYUN_USER | Secret | For Jianguoyun backup |
 | JIANGUOYUN_PASSWORD | Secret | For Jianguoyun backup |
+| GH_PAT | Secret | For Add Sync Repo |
+
 
 ## GitHub Apps Permissions
 
