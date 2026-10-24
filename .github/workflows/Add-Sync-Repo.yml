@@ -50,24 +50,16 @@ jobs:
       contents: read
 
     steps:
-      - name: 生成 App 令牌
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: 拉取私有同步仓库
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           # depth 1 即可，后续如果需要提交，脚本内部会自动处理拉取/冲突
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${SYNC_REPO}.git" /tmp/sync
 
       - name: 执行镜像与配置
         env:
-          GH_TOKEN:         ${{ steps.app-token.outputs.token }}
+          GH_TOKEN:         ${{ secrets.GH_PAT }}
           TARGET_OWNER:     ${{ github.repository_owner }}
           INPUT_UPSTREAM:   ${{ inputs.upstream }}
           INPUT_NAME:       ${{ inputs.name }}
